@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Inicializar repositorios globalmente
+        // ✅ Inicializar repositorios con contexto
         val pedidoRepository = PedidoRepository(this)
         val usuarioRepository = UsuarioRepository(this)
 
@@ -30,6 +30,8 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
+
+                    // 🚀 Pasamos los repositorios al NavGraph
                     NavGraph(
                         navController = navController,
                         pedidoRepository = pedidoRepository,

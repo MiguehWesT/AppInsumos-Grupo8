@@ -6,5 +6,7 @@ data class Usuario(
     val rut: String = "12.345.678-9",
     val email: String = "juan.perez@email.com",
     val telefono: String = "+56 9 8765 4321",
-    val direccion: String = "Av. Libertador Bernardo O'Higgins 1234, Santiago"
+    val direccion: String = "Av. Libertador Bernardo O'Higgins 1234, Santiago",
+    val fotoUri: String? = null,      // 🆕 URI de la foto del perfil
+    val ubicacion: String? = null     // 🆕 Última ubicación obtenida
 )

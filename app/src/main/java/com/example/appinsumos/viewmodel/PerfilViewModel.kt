@@ -40,6 +40,10 @@ class PerfilViewModel(private val repository: UsuarioRepository) : ViewModel() {
         _modoEdicion.value = !(_modoEdicion.value ?: false)
     }
 
+    fun mostrarMensaje(texto: String) {
+        _mensaje.value = texto
+    }
+
     fun actualizarUsuario(usuario: Usuario) {
         viewModelScope.launch {
             try {
@@ -68,5 +72,39 @@ class PerfilViewModel(private val repository: UsuarioRepository) : ViewModel() {
     fun cerrarSesion() {
         _mostrarDialogoCerrarSesion.value = false
         // Lógica para cerrar sesión
+    }
+
+    // ------------------------------------------------------------
+    // 📸 NUEVAS FUNCIONES: foto de perfil y ubicación GPS
+    // ------------------------------------------------------------
+
+    /** Guarda la ruta URI de la foto tomada con la cámara */
+    fun guardarFotoPerfil(uri: String) {
+        val usuarioActual = _usuario.value ?: Usuario()
+        _usuario.value = usuarioActual.copy(fotoUri = uri)
+
+        // (Opcional) Guardar también en BD
+        viewModelScope.launch {
+            try {
+                repository.actualizarUsuario(_usuario.value!!)
+            } catch (e: Exception) {
+                _mensaje.value = "Error al guardar foto: ${e.message}"
+            }
+        }
+    }
+
+    /** Guarda la ubicación actual del usuario */
+    fun guardarUbicacion(ubicacion: String) {
+        val usuarioActual = _usuario.value ?: Usuario()
+        _usuario.value = usuarioActual.copy(ubicacion = ubicacion)
+
+        // (Opcional) Persistir en la base de datos
+        viewModelScope.launch {
+            try {
+                repository.actualizarUsuario(_usuario.value!!)
+            } catch (e: Exception) {
+                _mensaje.value = "Error al guardar ubicación: ${e.message}"
+            }
+        }
     }
 }

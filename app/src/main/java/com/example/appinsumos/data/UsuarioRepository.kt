@@ -9,17 +9,18 @@ import kotlinx.coroutines.withContext
 class UsuarioRepository(context: Context) {
     private val dbHelper = PedidoDbHelper(context)
 
+    // 🔹 Obtiene el único usuario (id = 1)
     suspend fun obtenerUsuario(): Usuario = withContext(Dispatchers.IO) {
         val db = dbHelper.readableDatabase
         val cursor = db.query(
             "Usuario",
-            arrayOf("id", "nombre", "rut", "email", "telefono", "direccion"),
+            arrayOf("id", "nombre", "rut", "email", "telefono", "direccion", "fotoUri", "ubicacion"),
             "id = ?",
             arrayOf("1"),
             null, null, null
         )
 
-        var usuario = Usuario() // Usuario por defecto
+        var usuario = Usuario()
         if (cursor.moveToFirst()) {
             usuario = Usuario(
                 id = cursor.getString(cursor.getColumnIndexOrThrow("id")),
@@ -27,7 +28,9 @@ class UsuarioRepository(context: Context) {
                 rut = cursor.getString(cursor.getColumnIndexOrThrow("rut")),
                 email = cursor.getString(cursor.getColumnIndexOrThrow("email")),
                 telefono = cursor.getString(cursor.getColumnIndexOrThrow("telefono")),
-                direccion = cursor.getString(cursor.getColumnIndexOrThrow("direccion"))
+                direccion = cursor.getString(cursor.getColumnIndexOrThrow("direccion")),
+                fotoUri = cursor.getString(cursor.getColumnIndexOrThrow("fotoUri")),
+                ubicacion = cursor.getString(cursor.getColumnIndexOrThrow("ubicacion"))
             )
         }
         cursor.close()
@@ -35,6 +38,7 @@ class UsuarioRepository(context: Context) {
         usuario
     }
 
+    // 🔹 Actualiza usuario con nuevos campos incluidos
     suspend fun actualizarUsuario(usuario: Usuario): Boolean = withContext(Dispatchers.IO) {
         try {
             val db = dbHelper.writableDatabase
@@ -44,6 +48,8 @@ class UsuarioRepository(context: Context) {
                 put("email", usuario.email)
                 put("telefono", usuario.telefono)
                 put("direccion", usuario.direccion)
+                put("fotoUri", usuario.fotoUri)
+                put("ubicacion", usuario.ubicacion)
             }
             val resultado = db.update("Usuario", values, "id = ?", arrayOf(usuario.id))
             db.close()

@@ -1,5 +1,14 @@
 package com.example.appinsumos.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.location.Location
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -12,11 +21,17 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.example.appinsumos.viewmodel.PerfilViewModel
+import com.google.android.gms.location.LocationServices
+import java.io.File
+import java.io.FileOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,19 +39,24 @@ fun PerfilScreen(
     navController: NavController,
     viewModel: PerfilViewModel
 ) {
+    val context = LocalContext.current
     val usuario by viewModel.usuario.observeAsState()
     val modoEdicion by viewModel.modoEdicion.observeAsState(false)
     val mostrarDialogoCerrarSesion by viewModel.mostrarDialogoCerrarSesion.observeAsState(false)
     val mensaje by viewModel.mensaje.observeAsState(null)
 
-    // Estados locales para edición
+    // Estados locales editables
     var nombre by remember { mutableStateOf(usuario?.nombre ?: "") }
     var rut by remember { mutableStateOf(usuario?.rut ?: "") }
     var email by remember { mutableStateOf(usuario?.email ?: "") }
     var telefono by remember { mutableStateOf(usuario?.telefono ?: "") }
     var direccion by remember { mutableStateOf(usuario?.direccion ?: "") }
 
-    // Actualizar campos cuando cambie el usuario
+    // Estados de cámara y GPS
+    var imageUri by remember { mutableStateOf(usuario?.fotoUri?.let { Uri.parse(it) }) }
+    var locationText by remember { mutableStateOf(usuario?.ubicacion ?: "Ubicación no detectada") }
+
+    // Actualiza los campos si cambia el usuario
     LaunchedEffect(usuario) {
         usuario?.let {
             nombre = it.nombre
@@ -44,6 +64,46 @@ fun PerfilScreen(
             email = it.email
             telefono = it.telefono
             direccion = it.direccion
+            if (it.fotoUri != null) imageUri = Uri.parse(it.fotoUri)
+            if (it.ubicacion != null) locationText = it.ubicacion!!
+        }
+    }
+
+    // 📸 Lanzador de cámara con manejo seguro de null
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            try {
+                val uri = saveBitmapToInternalStorage(context, bitmap)
+                imageUri = uri
+                viewModel.guardarFotoPerfil(uri.toString())
+            } catch (e: Exception) {
+                e.printStackTrace()
+                viewModel.mostrarMensaje("Error al guardar la foto: ${e.localizedMessage}")
+            }
+        } else {
+            viewModel.mostrarMensaje("⚠️ No se capturó ninguna imagen.")
+        }
+
+    }
+
+    // 📍 Lanzador de permisos de ubicación
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+            fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                if (location != null) {
+                    locationText = "Lat: ${location.latitude}, Lon: ${location.longitude}"
+                    viewModel.guardarUbicacion(locationText)
+                } else {
+                    locationText = "No se pudo obtener ubicación"
+                }
+            }
+        } else {
+            locationText = "Permiso de ubicación denegado"
         }
     }
 
@@ -70,6 +130,7 @@ fun PerfilScreen(
             )
         }
     ) { padding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -79,7 +140,8 @@ fun PerfilScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // Mensaje de estado (si existe)
+
+            // ✅ Mensajes
             mensaje?.let {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -104,7 +166,7 @@ fun PerfilScreen(
                 }
             }
 
-            // Avatar y nombre
+            // 🧍 Avatar + cámara
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
@@ -121,55 +183,82 @@ fun PerfilScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Surface(
-                        modifier = Modifier.size(100.dp),
+                        modifier = Modifier.size(120.dp),
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.primary,
                         shadowElevation = 8.dp
                     ) {
-                        Box(
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.size(60.dp),
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
+                        Box(contentAlignment = Alignment.Center) {
+                            if (imageUri != null) {
+                                val bitmap = BitmapFactory.decodeStream(
+                                    context.contentResolver.openInputStream(imageUri!!)
+                                )
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Foto de perfil",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(70.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
                         }
                     }
 
-                    Text(
-                        text = usuario?.nombre ?: "Cargando...",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    Button(onClick = { cameraLauncher.launch(null) }) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Tomar foto de perfil")
+                    }
 
-                    AssistChip(
-                        onClick = {},
-                        label = { Text("Paciente Activo") },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            labelColor = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
+
+                    // 📍 Botón de ubicación con permiso automático
+                    OutlinedButton(onClick = {
+                        when (ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        )) {
+                            PackageManager.PERMISSION_GRANTED -> {
+                                val fusedLocationClient =
+                                    LocationServices.getFusedLocationProviderClient(context)
+                                fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                                    if (location != null) {
+                                        locationText =
+                                            "Lat: ${location.latitude}, Lon: ${location.longitude}"
+                                        viewModel.guardarUbicacion(locationText)
+                                    } else {
+                                        locationText = "No se pudo obtener ubicación"
+                                    }
+                                }
+                            }
+
+                            else -> {
+                                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
+                        }
+                    }) {
+                        Icon(Icons.Default.LocationOn, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Obtener ubicación")
+                    }
+
+                    Text(
+                        text = locationText,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
 
-            // Información personal
+            // 🧾 Información personal
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(4.dp)
             ) {
                 Column(
@@ -182,7 +271,6 @@ fun PerfilScreen(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
-
                     CampoInfo(
                         icono = Icons.Default.Person,
                         label = "Nombre Completo",
@@ -223,10 +311,11 @@ fun PerfilScreen(
                         onValueChange = { direccion = it },
                         multilinea = true
                     )
+
                 }
             }
 
-            // Botón guardar cambios (solo visible en modo edición)
+            // 💾 Guardar cambios
             if (modoEdicion) {
                 Button(
                     onClick = {
@@ -245,10 +334,7 @@ fun PerfilScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -256,43 +342,7 @@ fun PerfilScreen(
                 }
             }
 
-            // Opciones adicionales
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.cardElevation(4.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp)
-                ) {
-                    OpcionMenu(
-                        icono = Icons.Default.Notifications,
-                        texto = "Notificaciones",
-                        onClick = { /* Acción futura */ }
-                    )
-
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    OpcionMenu(
-                        icono = Icons.Default.Settings,
-                        texto = "Configuración",
-                        onClick = { /* Acción futura */ }
-                    )
-
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    OpcionMenu(
-                        icono = Icons.Default.Info,
-                        texto = "Ayuda y Soporte",
-                        onClick = { /* Acción futura */ }
-                    )
-                }
-            }
-
-            // Botón cerrar sesión
+            // 🚪 Cerrar sesión
             OutlinedButton(
                 onClick = { viewModel.mostrarDialogoCerrarSesion() },
                 modifier = Modifier
@@ -311,11 +361,9 @@ fun PerfilScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Cerrar Sesión", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
-
-            Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // Diálogo de confirmación para cerrar sesión
+        // ⚠️ Diálogo cerrar sesión
         if (mostrarDialogoCerrarSesion) {
             AlertDialog(
                 onDismissRequest = { viewModel.ocultarDialogoCerrarSesion() },
@@ -348,6 +396,16 @@ fun PerfilScreen(
     }
 }
 
+// 🔧 Guardar imagen localmente
+fun saveBitmapToInternalStorage(context: android.content.Context, bitmap: Bitmap): Uri {
+    val filename = "perfil_${System.currentTimeMillis()}.jpg"
+    val file = File(context.filesDir, filename)
+    FileOutputStream(file).use { out ->
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+    }
+    return Uri.fromFile(file)
+}
+
 @Composable
 fun CampoInfo(
     icono: androidx.compose.ui.graphics.vector.ImageVector,
@@ -357,87 +415,24 @@ fun CampoInfo(
     onValueChange: (String) -> Unit,
     multilinea: Boolean = false
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                icono,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Icon(icono, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-
         if (editable) {
             OutlinedTextField(
                 value = valor,
                 onValueChange = onValueChange,
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = !multilinea,
-                maxLines = if (multilinea) 3 else 1,
-                colors = OutlinedTextFieldDefaults.colors()
+                maxLines = if (multilinea) 3 else 1
             )
         } else {
-            Text(
-                text = valor,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(start = 4.dp)
-            )
-        }
-    }
-}
-
-@Composable
-fun OpcionMenu(
-    icono: androidx.compose.ui.graphics.vector.ImageVector,
-    texto: String,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    icono,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = texto,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            Icon(
-                Icons.Default.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(valor, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(start = 4.dp))
         }
     }
 }
