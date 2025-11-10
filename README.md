@@ -3,7 +3,9 @@
 Aplicación móvil para la gestión y seguimiento de insumos médicos, desarrollada con Android nativo y arquitectura MVVM.
 
 Integrantes del Grupo
+
 Paul Diaz
+
 Miguel Trujillo
 
 ## 📱 Características
