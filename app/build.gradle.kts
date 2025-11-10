@@ -56,6 +56,9 @@ dependencies {
     // Material Icons Extended
     implementation("androidx.compose.material:material-icons-extended:1.6.8")
 
+    // LiveData Compose
+    implementation("androidx.compose.runtime:runtime-livedata:1.6.8")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

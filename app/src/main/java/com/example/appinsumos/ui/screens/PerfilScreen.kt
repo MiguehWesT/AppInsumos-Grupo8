@@ -1,4 +1,4 @@
-package com.example.appinsumos.ui
+package com.example.appinsumos.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -9,25 +9,43 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.appinsumos.viewmodel.PerfilViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PerfilScreen(navController: NavController) {
-    var mostrarDialogoCerrarSesion by remember { mutableStateOf(false) }
-    var modoEdicion by remember { mutableStateOf(false) }
+fun PerfilScreen(
+    navController: NavController,
+    viewModel: PerfilViewModel
+) {
+    val usuario by viewModel.usuario.observeAsState()
+    val modoEdicion by viewModel.modoEdicion.observeAsState(false)
+    val mostrarDialogoCerrarSesion by viewModel.mostrarDialogoCerrarSesion.observeAsState(false)
+    val mensaje by viewModel.mensaje.observeAsState(null)
 
-    // Datos del usuario simulado
-    var nombre by remember { mutableStateOf("Juan Pepito Tapia") }
-    var rut by remember { mutableStateOf("12.345.678-9") }
-    var direccion by remember { mutableStateOf("Av. Libertador Bernardo O'Higgins 1234, Santiago") }
-    var telefono by remember { mutableStateOf("+56 9 8765 4321") }
-    var email by remember { mutableStateOf("juan.pepe@email.com") }
+    // Estados locales para edición
+    var nombre by remember { mutableStateOf(usuario?.nombre ?: "") }
+    var rut by remember { mutableStateOf(usuario?.rut ?: "") }
+    var email by remember { mutableStateOf(usuario?.email ?: "") }
+    var telefono by remember { mutableStateOf(usuario?.telefono ?: "") }
+    var direccion by remember { mutableStateOf(usuario?.direccion ?: "") }
+
+    // Actualizar campos cuando cambie el usuario
+    LaunchedEffect(usuario) {
+        usuario?.let {
+            nombre = it.nombre
+            rut = it.rut
+            email = it.email
+            telefono = it.telefono
+            direccion = it.direccion
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -39,7 +57,7 @@ fun PerfilScreen(navController: NavController) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { modoEdicion = !modoEdicion }) {
+                    IconButton(onClick = { viewModel.toggleModoEdicion() }) {
                         Icon(
                             if (modoEdicion) Icons.Default.Close else Icons.Default.Edit,
                             contentDescription = if (modoEdicion) "Cancelar" else "Editar"
@@ -61,6 +79,31 @@ fun PerfilScreen(navController: NavController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            // Mensaje de estado (si existe)
+            mensaje?.let {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (it.contains("exitosamente"))
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            if (it.contains("exitosamente")) Icons.Default.CheckCircle else Icons.Default.Warning,
+                            contentDescription = null
+                        )
+                        Text(it, fontSize = 14.sp)
+                    }
+                }
+            }
+
             // Avatar y nombre
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -96,7 +139,7 @@ fun PerfilScreen(navController: NavController) {
                     }
 
                     Text(
-                        text = nombre,
+                        text = usuario?.nombre ?: "Cargando...",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -183,12 +226,21 @@ fun PerfilScreen(navController: NavController) {
                 }
             }
 
-            // Botón guardar cambios en el modo edicion
+            // Botón guardar cambios (solo visible en modo edición)
             if (modoEdicion) {
                 Button(
                     onClick = {
-                        modoEdicion = false
-                        // espacio para añadir logica en un futuro (boton guardar)
+                        usuario?.let {
+                            viewModel.actualizarUsuario(
+                                it.copy(
+                                    nombre = nombre,
+                                    rut = rut,
+                                    email = email,
+                                    telefono = telefono,
+                                    direccion = direccion
+                                )
+                            )
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -227,7 +279,7 @@ fun PerfilScreen(navController: NavController) {
                     OpcionMenu(
                         icono = Icons.Default.Settings,
                         texto = "Configuración",
-                        onClick = { /* añadir logica */ }
+                        onClick = { /* Acción futura */ }
                     )
 
                     Divider(modifier = Modifier.padding(vertical = 4.dp))
@@ -235,14 +287,14 @@ fun PerfilScreen(navController: NavController) {
                     OpcionMenu(
                         icono = Icons.Default.Info,
                         texto = "Ayuda y Soporte",
-                        onClick = { /* añadir logica */ }
+                        onClick = { /* Acción futura */ }
                     )
                 }
             }
 
             // Botón cerrar sesión
             OutlinedButton(
-                onClick = { mostrarDialogoCerrarSesion = true },
+                onClick = { viewModel.mostrarDialogoCerrarSesion() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -263,10 +315,10 @@ fun PerfilScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // mensaje de confirmación para cerrar sesion
+        // Diálogo de confirmación para cerrar sesión
         if (mostrarDialogoCerrarSesion) {
             AlertDialog(
-                onDismissRequest = { mostrarDialogoCerrarSesion = false },
+                onDismissRequest = { viewModel.ocultarDialogoCerrarSesion() },
                 icon = {
                     Icon(
                         Icons.Default.ExitToApp,
@@ -278,10 +330,7 @@ fun PerfilScreen(navController: NavController) {
                 text = { Text("¿Está seguro que desea cerrar sesión?") },
                 confirmButton = {
                     Button(
-                        onClick = {
-                            mostrarDialogoCerrarSesion = false
-                            // lógica para cerrar sesion
-                        },
+                        onClick = { viewModel.cerrarSesion() },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error
                         )
@@ -290,7 +339,7 @@ fun PerfilScreen(navController: NavController) {
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { mostrarDialogoCerrarSesion = false }) {
+                    TextButton(onClick = { viewModel.ocultarDialogoCerrarSesion() }) {
                         Text("Cancelar")
                     }
                 }

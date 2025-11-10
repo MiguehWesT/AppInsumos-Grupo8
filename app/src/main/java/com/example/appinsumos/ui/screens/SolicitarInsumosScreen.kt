@@ -1,4 +1,4 @@
-package com.example.appinsumos.ui
+package com.example.appinsumos.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -9,36 +9,29 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.appinsumos.viewmodel.InsumosViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SolicitarInsumosScreen(navController: NavController) {
-    var insumoSeleccionado by remember { mutableStateOf("") }
-    var cantidad by remember { mutableStateOf("") }
-    var prioridad by remember { mutableStateOf("Programada") }
+fun SolicitarInsumosScreen(
+    navController: NavController,
+    viewModel: InsumosViewModel
+) {
+    val insumoSeleccionado by viewModel.insumoSeleccionado.observeAsState("")
+    val cantidad by viewModel.cantidad.observeAsState("")
+    val prioridad by viewModel.prioridad.observeAsState("Programada")
+    val mostrarConfirmacion by viewModel.mostrarConfirmacion.observeAsState(false)
+    val mensaje by viewModel.mensaje.observeAsState(null)
+
     var expandedInsumo by remember { mutableStateOf(false) }
     var expandedPrioridad by remember { mutableStateOf(false) }
-    var mostrarConfirmacion by remember { mutableStateOf(false) }
-
-    val insumos = listOf(
-        "Insulina",
-        "Agujas",
-        "Jeringas",
-        "Gasas",
-        "Vendas",
-        "Guantes",
-        "Alcohol",
-        "Termómetro"
-    )
-
-    val prioridades = listOf("Urgente", "Programada")
 
     Scaffold(
         topBar = {
@@ -70,7 +63,31 @@ fun SolicitarInsumosScreen(navController: NavController) {
                 color = MaterialTheme.colorScheme.primary
             )
 
-            // selector de insumos
+            // Mensaje de estado (si existe)
+            mensaje?.let {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (it.contains("exitosamente"))
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            if (it.contains("exitosamente")) Icons.Default.CheckCircle else Icons.Default.Warning,
+                            contentDescription = null
+                        )
+                        Text(it)
+                    }
+                }
+            }
+
+            // Selector de Insumo
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(2.dp),
@@ -103,11 +120,11 @@ fun SolicitarInsumosScreen(navController: NavController) {
                             expanded = expandedInsumo,
                             onDismissRequest = { expandedInsumo = false }
                         ) {
-                            insumos.forEach { insumo ->
+                            viewModel.insumos.forEach { insumo ->
                                 DropdownMenuItem(
                                     text = { Text(insumo) },
                                     onClick = {
-                                        insumoSeleccionado = insumo
+                                        viewModel.actualizarInsumo(insumo)
                                         expandedInsumo = false
                                     }
                                 )
@@ -117,7 +134,7 @@ fun SolicitarInsumosScreen(navController: NavController) {
                 }
             }
 
-            // recuadro de cantidad
+            // Campo de Cantidad
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(2.dp),
@@ -133,7 +150,7 @@ fun SolicitarInsumosScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = cantidad,
-                        onValueChange = { cantidad = it },
+                        onValueChange = { viewModel.actualizarCantidad(it) },
                         placeholder = { Text("Ingrese la cantidad") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
@@ -144,7 +161,7 @@ fun SolicitarInsumosScreen(navController: NavController) {
                 }
             }
 
-            // selector prioridad
+            // Selector de Prioridad
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(2.dp),
@@ -185,11 +202,11 @@ fun SolicitarInsumosScreen(navController: NavController) {
                             expanded = expandedPrioridad,
                             onDismissRequest = { expandedPrioridad = false }
                         ) {
-                            prioridades.forEach { prioridadItem ->
+                            viewModel.prioridades.forEach { prioridadItem ->
                                 DropdownMenuItem(
                                     text = { Text(prioridadItem) },
                                     onClick = {
-                                        prioridad = prioridadItem
+                                        viewModel.actualizarPrioridad(prioridadItem)
                                         expandedPrioridad = false
                                     }
                                 )
@@ -201,13 +218,9 @@ fun SolicitarInsumosScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // boton enviar
+            // Botón Enviar
             Button(
-                onClick = {
-                    if (insumoSeleccionado.isNotEmpty() && cantidad.isNotEmpty()) {
-                        mostrarConfirmacion = true
-                    }
-                },
+                onClick = { viewModel.enviarSolicitud() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -220,10 +233,10 @@ fun SolicitarInsumosScreen(navController: NavController) {
             }
         }
 
-        // mensaje de confirmación
+        // Dialog de confirmación
         if (mostrarConfirmacion) {
             AlertDialog(
-                onDismissRequest = { mostrarConfirmacion = false },
+                onDismissRequest = { viewModel.ocultarConfirmacion() },
                 icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 title = { Text("Solicitud Enviada", fontWeight = FontWeight.Bold) },
                 text = {
@@ -238,7 +251,8 @@ fun SolicitarInsumosScreen(navController: NavController) {
                 confirmButton = {
                     Button(
                         onClick = {
-                            mostrarConfirmacion = false
+                            viewModel.ocultarConfirmacion()
+                            viewModel.limpiarFormulario()
                             navController.popBackStack()
                         }
                     ) {

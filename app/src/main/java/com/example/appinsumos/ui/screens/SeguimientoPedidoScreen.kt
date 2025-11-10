@@ -1,4 +1,4 @@
-package com.example.appinsumos.ui
+package com.example.appinsumos.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,43 +8,25 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.appinsumos.model.Pedido
 import com.example.appinsumos.navigation.Screen
-
-data class Pedido(
-    val id: String,
-    val insumo: String,
-    val cantidad: String,
-    val estado: EstadoPedido,
-    val fecha: String,
-    val prioridad: String
-)
-
-enum class EstadoPedido(val texto: String, val emoji: String, val color: Color) {
-    PENDIENTE("Pendiente", "⏳", Color(0xFFFFA726)),
-    EN_PREPARACION("En preparación", "🏭", Color(0xFF42A5F5)),
-    EN_REPARTO("En reparto", "🚚", Color(0xFF9C27B0)),
-    ENTREGADO("Entregado", "✅", Color(0xFF66BB6A))
-}
+import com.example.appinsumos.viewmodel.SeguimientoViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SeguimientoPedidoScreen(navController: NavController) {
-    // insumos simulados
-    val pedidos = remember {
-        listOf(
-            Pedido("001", "Insulina", "10 unidades", EstadoPedido.EN_REPARTO, "05/10/2025", "Urgente"),
-            Pedido("002", "Agujas", "50 unidades", EstadoPedido.EN_PREPARACION, "04/10/2025", "Programada"),
-            Pedido("003", "Gasas", "20 paquetes", EstadoPedido.ENTREGADO, "01/10/2025", "Programada"),
-            Pedido("004", "Jeringas", "30 unidades", EstadoPedido.PENDIENTE, "06/10/2025", "Urgente")
-        )
-    }
+fun SeguimientoPedidoScreen(
+    navController: NavController,
+    viewModel: SeguimientoViewModel
+) {
+    val pedidos by viewModel.pedidos.observeAsState(emptyList())
+    val isLoading by viewModel.isLoading.observeAsState(false)
 
     Scaffold(
         topBar = {
@@ -53,6 +35,11 @@ fun SeguimientoPedidoScreen(navController: NavController) {
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, "Volver")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.cargarPedidos() }) {
+                        Icon(Icons.Default.Refresh, "Recargar")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -69,49 +56,60 @@ fun SeguimientoPedidoScreen(navController: NavController) {
             )
         }
     ) { padding ->
-        if (pedidos.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.ShoppingCart,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
-                    Text(
-                        "No hay pedidos registrados",
-                        fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            when {
+                isLoading -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center)
                     )
                 }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(pedidos) { pedido ->
-                    PedidoCard(
-                        pedido = pedido,
-                        onClick = {
-                            navController.navigate(Screen.DetallePedido.createRoute(pedido.id))
+                pedidos.isEmpty() -> {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ShoppingCart,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                        Text(
+                            "No hay pedidos registrados",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = { navController.navigate(Screen.SolicitarInsumos.route) }) {
+                            Text("Crear primer pedido")
                         }
-                    )
+                    }
                 }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(pedidos) { pedido ->
+                            PedidoCard(
+                                pedido = pedido,
+                                onClick = {
+                                    navController.navigate(Screen.DetallePedido.createRoute(pedido.id))
+                                }
+                            )
+                        }
 
-                item {
-                    Spacer(modifier = Modifier.height(80.dp))
+                        item {
+                            Spacer(modifier = Modifier.height(80.dp))
+                        }
+                    }
                 }
             }
         }

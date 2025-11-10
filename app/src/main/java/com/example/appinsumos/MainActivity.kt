@@ -9,6 +9,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
+import com.example.appinsumos.data.PedidoRepository
+import com.example.appinsumos.data.UsuarioRepository
 import com.example.appinsumos.navigation.NavGraph
 import com.example.appinsumos.ui.theme.AppInsumosTheme
 
@@ -16,6 +18,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Inicializar repositorios globalmente
+        val pedidoRepository = PedidoRepository(this)
+        val usuarioRepository = UsuarioRepository(this)
+
         setContent {
             AppInsumosTheme {
                 Surface(
@@ -23,7 +30,11 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
-                    NavGraph(navController = navController)
+                    NavGraph(
+                        navController = navController,
+                        pedidoRepository = pedidoRepository,
+                        usuarioRepository = usuarioRepository
+                    )
                 }
             }
         }
